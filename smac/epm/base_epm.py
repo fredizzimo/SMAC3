@@ -226,7 +226,8 @@ class AbstractEPM(object):
             # VAR[1/n (X_1 + ... + X_n)] = 
             # 1/n^2 * ( VAR(X_1) + ... + VAR(X_n)) 
             # for independent X_1 ... X_n 
-            var_x = np.sum(vars) / (len(vars)^2)
+            var_x = np.sum(vars) / np.power(len(vars), 2)
+
             if var_x < self.var_threshold:
                 var_x = self.var_threshold
 
