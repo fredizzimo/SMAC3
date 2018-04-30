@@ -2,10 +2,26 @@
 
 ## Major changes
 
-* Model predictions fixed: 
+* ADD Hydra (see "Hydra: Automatically Configuring Algorithms for Portfolio-Based Selection" by Xu et al)
+* Model predictions fixed:
   * FIX predictions if EPM was trained on log(y)
   * FIX marginalized variance across instances
   * FIX optimize EI also for runtime scenario (logEI not used anymore)
+* MAINT parsing of options
+
+## Minor changes
+
+* ADD output of estimated cost of final incumbent
+* ADD explanation of "deterministic" option in documentation
+* ADD save configspace as json
+* MAINT Maximal cutoff time of pynisher set to UINT16
+* MAINT make SMAC deterministic if function is deterministic, the budget is limited and the run objective is quality
+* MAINT SLS on acquisition function (plateau walks)
+* MAINT README
+* FIX abort-on-first-run-crash
+* FIX pSMAC input directory parsing
+* FIX fmin interface with more than 10 parameters
+* FIX no output directory if set to '' (empty string)
 
 # 0.8
 
@@ -55,13 +71,13 @@
 
 ## Major changes
 
-* MAINT documentation (nearly every part was improved and extended, 
+* MAINT documentation (nearly every part was improved and extended,
   including installation, examples, API).
 * ADD EPILS as mode (modified version of ParamILS).
 * MAINT minimal required versions of configspace, pyrfr, sklearn increased
   (several issues fixed in new configspace version).
-* MAINT for quality scenarios, the user can specify the objective 
-  value for crashed runs 
+* MAINT for quality scenarios, the user can specify the objective
+  value for crashed runs
   (returned NaN and Inf are replaced by value for crashed runs).
 
 ## Minor changes
@@ -185,9 +201,9 @@
 # 0.2.1
 
 * CI: travis-ci continuous integration on OSX.
-* ADD: initial design for mulitple configurations, initial design for a 
+* ADD: initial design for mulitple configurations, initial design for a
   random configuration.
-* MAINT: use sklearn PCA if more than 7 instance features are available (as 
+* MAINT: use sklearn PCA if more than 7 instance features are available (as
   in SMAC 1 and 2).
 * MAINT: use same minimum step size for the stochastic local search as in
   SMAC2.
@@ -197,21 +213,21 @@
 
 # 0.2
 
-* ADD 55: Separate modules for the initial design and a more flexible 
+* ADD 55: Separate modules for the initial design and a more flexible
   constructor for the SMAC class.
 * ADD 41: Add ROAR (random online adaptive racing) class.
 * ADD 82: Add fmin_smac, a scipy.optimize.fmin_l_bfgs_b-like interface to the
   SMAC algorithm.
-* NEW documentation at https://automl.github.io/SMAC3/stable and 
+* NEW documentation at https://automl.github.io/SMAC3/stable and
   https://automl.github.io/SMAC3/dev.
-* FIX 62: intensification previously used a random seed from np.random 
+* FIX 62: intensification previously used a random seed from np.random
   instead of from SMAC's own random number generator.
 * FIX 42: class RunHistory can now be pickled.
-* FIX 48: stats and runhistory objects are now injected into the target 
+* FIX 48: stats and runhistory objects are now injected into the target
   algorithm execution classes.
-* FIX 72: it is now mandatory to either specify a configuration space or to 
+* FIX 72: it is now mandatory to either specify a configuration space or to
   pass the path to a PCS file.
-* FIX 49: allow passing a callable directly to SMAC. SMAC will wrap the 
+* FIX 49: allow passing a callable directly to SMAC. SMAC will wrap the
   callable with the appropriate target algorithm runner.
 
 # 0.1.3
