@@ -12,7 +12,7 @@ from smac.stats.stats import Stats
 from smac.scenario.scenario import Scenario
 from smac.runhistory.runhistory import RunHistory
 from smac.runhistory.runhistory2epm import AbstractRunHistory2EPM, \
-    RunHistory2EPM4LogCost, RunHistory2EPM4Cost
+    RunHistory2EPM4Cost
 from smac.initial_design.initial_design import InitialDesign
 from smac.initial_design.default_configuration_design import \
     DefaultConfiguration
@@ -192,13 +192,13 @@ class SMAC(object):
                                               instance_features=scenario.feature_array,
                                               seed=rng.randint(MAXINT),
                                               pca_components=scenario.PCA_DIM,
-                                              unlog_y=scenario.run_obj == "runtime",
                                               num_trees=scenario.rf_num_trees,
                                               do_bootstrapping=scenario.rf_do_bootstrapping,
                                               ratio_features=scenario.rf_ratio_features,
                                               min_samples_split=scenario.rf_min_samples_split,
                                               min_samples_leaf=scenario.rf_min_samples_leaf,
-                                              max_depth=scenario.rf_max_depth)
+                                              max_depth=scenario.rf_max_depth,
+                                              y_transform=scenario.y_transform)
         # initial acquisition function
         if acquisition_function is None:
             acquisition_function = EI(model=model)
@@ -348,9 +348,8 @@ class SMAC(object):
                 # if we log the performance data,
                 # the RFRImputator will already get
                 # log transform data from the runhistory
-                cutoff = np.log10(scenario.cutoff)
-                threshold = np.log10(scenario.cutoff *
-                                     scenario.par_factor)
+                cutoff = scenario.cutoff
+                threshold = scenario.cutoff * scenario.par_factor
 
                 imputor = RFRImputator(rng=rng,
                                        cutoff=cutoff,
@@ -359,7 +358,7 @@ class SMAC(object):
                                        change_threshold=0.01,
                                        max_iter=2)
 
-                runhistory2epm = RunHistory2EPM4LogCost(
+                runhistory2epm = RunHistory2EPM4Cost(
                     scenario=scenario, num_params=num_params,
                     success_states=[StatusType.SUCCESS, ],
                     impute_censored_data=True,

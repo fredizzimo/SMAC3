@@ -4,12 +4,13 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.exceptions import NotFittedError
 
+from smac.epm.y_transformers import AbstractYTransformer,\
+    LogYTransformer, LogNormYTransformer,\
+    QuantileYTransformer, IDYTransformer
+
 __author__ = "Marius Lindauer"
 __copyright__ = "Copyright 2016, ML4AAD"
 __license__ = "3-clause BSD"
-__maintainer__ = "Marius Lindauer"
-__email__ = "lindauer@cs.uni-freiburg.de"
-__version__ = "0.0.1"
 
 
 class AbstractEPM(object):
@@ -38,17 +39,14 @@ class AbstractEPM(object):
     var_threshold : float
         Lower bound vor variance. If estimated variance < var_threshold, the set
         to var_threshold
-    types : list
-        If set, contains a list with feature types (cat,const) of input vector
-    unlog_y: bool
-        If the y data in the training data is log-transformed,
-        this option will undo this tranformation during predictions        
+    y_transformer: AbstractYTransformer
+    
     """
 
     def __init__(self,
                  instance_features: np.ndarray=None,
                  pca_components: float=None,
-                 unlog_y:bool=False):
+                 y_transform: str='id'):
         """Constructor
 
         Parameters
@@ -63,10 +61,16 @@ class AbstractEPM(object):
         unlog_y: bool
             If the y data in the training data is log-transformed,
             this option will undo this tranformation during predictions    
+        y_transform: ['id', 'log', logN, 'quant']
+            Options to transform y (cost values) for training EPM.
+            The EPM has nevertheless return predictions in the original space
+            'log': LogYTransformer
+            'logN': LogNormYTransformer
+            'quant': QuantileYTransformer
+            'id': IDYTransformer
         """
         self.instance_features = instance_features
         self.pca_components = pca_components
-        self.unlog_y = unlog_y
         
         if instance_features is not None:
             self.n_feats = instance_features.shape[1]
@@ -83,6 +87,17 @@ class AbstractEPM(object):
 
         # Never use a lower variance than this
         self.var_threshold = 10 ** -5
+        
+        # will be used in the _train and _predict
+        self.y_transformer = None
+        if y_transform == 'id':
+            self.y_transformer = IDYTransformer()
+        elif y_transform == 'log':
+            self.y_transformer = LogYTransformer()
+        elif y_transform == 'logN':
+            self.y_transformer = LogNormYTransformer()
+        elif y_transform == 'quant':
+            self.y_transformer = QuantileYTransformer()
 
     def train(self, X: np.ndarray, Y: np.ndarray, **kwargs):
         """Trains the EPM on X and Y.

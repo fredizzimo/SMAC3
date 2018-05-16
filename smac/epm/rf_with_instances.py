@@ -131,7 +131,8 @@ class RandomForestWithInstances(AbstractEPM):
         """
 
         self.X = X
-        self.y = y.flatten()
+        self.y = self.y_transformer.fit_transform(y.flatten())
+        
 
         if self.n_points_per_tree <= 0:
             self.rf_opts.num_data_points_per_tree = self.X.shape[0]
@@ -197,28 +198,20 @@ class RandomForestWithInstances(AbstractEPM):
         means = np.zeros(X.shape[0])
         vars_ =  np.zeros(X.shape[0])
         for i, row_X in enumerate(X):
-            if self.unlog_y:
-                preds_per_tree = self.rf.all_leaf_values(row_X)
-                
-                means_trees = np.zeros(len(preds_per_tree))
-                # we have to loop over them because 
-                # we can have different amounts of 
-                # predictions in each tree
-                for j, preds_tree in enumerate(preds_per_tree):
-                    # per tree
-                    log_mean = np.mean(preds_tree)
-                    log_var = np.var(preds_tree)
-                    # mean of log-normal distribution:
-                    mean_tree = 10**(log_mean + log_var/2)
-                    means_trees[j] = mean_tree
-                
-                # across trees
-                mean = np.mean(means_trees) 
-                var = np.var(means_trees) # variance over trees as uncertainty estimate
-            else:
-                #TODO: predict_mean_var() uses law of total variance, 
-                #but we only are interested in the variance across trees
-                mean, var = self.rf.predict_mean_var(row_X)
+            preds_per_tree = self.rf.all_leaf_values(row_X)
+            
+            means_trees = np.zeros(len(preds_per_tree))
+            # we have to loop over them because 
+            # we can have different amounts of 
+            # predictions in each tree
+            for j, preds_tree in enumerate(preds_per_tree):
+                # per tree
+                means_trees[j] = self.y_transformer.inverse_mean_transform(np.array(preds_tree))
+            
+            # across trees
+            mean = np.mean(means_trees) 
+            var = np.var(means_trees) # variance over trees as uncertainty estimate
+
             means[i] = mean
             vars_[i] = var
 

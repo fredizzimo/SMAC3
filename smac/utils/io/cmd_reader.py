@@ -451,30 +451,34 @@ class CMDReader(object):
                                     "Configurations).")
 
         ## RF Hyperparameters
-        smac_opts.add_argument("--rf_num_trees","--rf-num-trees",
+        smac_opts.add_argument("--rf-num-trees","--rf_num_trees",
                                dest='rf_num_trees',
                                default=10, type=int,
                                help="[dev] Number of trees in the random forest (> 1).")
-        smac_opts.add_argument("--rf_do_bootstrapping","--rf-do-bootstrapping",
+        smac_opts.add_argument("--rf-do-bootstrapping","--rf_do_bootstrapping",
                        dest='rf_do_bootstrapping',
                        default=True, type=bool,
                        help="[dev] Use bootstraping in random forest.")
-        smac_opts.add_argument("--rf_ratio_features","--rf-ratio-features",
+        smac_opts.add_argument("--rf-ratio-features","--rf_ratio_features",
                        dest='rf_ratio_features',
                        default=5. / 6., type=float,
                        help="[dev] Ratio of sampled features in each split ([0.,1.]).")
-        smac_opts.add_argument("--rf_min_samples_split","--rf-min-samples-split",
+        smac_opts.add_argument("--rf-min-samples-split","--rf_min_samples_split",
                        dest='rf_min_samples_split',
                        default=3, type=int,
                        help="[dev] Minimum number of samples to split for building a tree in the random forest.")
-        smac_opts.add_argument("--rf_min_samples_leaf","--rf-min-samples-leaf",
+        smac_opts.add_argument("--rf-min-samples-leaf","--rf_min_samples_leaf",
                        dest='rf_min_samples_leaf',
                        default=3, type=int,
                        help="[dev] Minimum required number of samples in each leaf of a tree in the random forest.")
-        smac_opts.add_argument("--rf_max_depth","--rf-max-depth",
+        smac_opts.add_argument("--rf-max-depth","--rf_max_depth",
                        dest='rf_max_depth',
                        default=20, type=int,
                        help="[dev] Maximum depth of each tree in the random forest.")
+        smac_opts.add_argument("--y-transform","--y_transform",
+                       dest='y_transform',
+                       default="id", choices=['id','log','logN','quant'],
+                       help="[dev] Transform of cost values to train EPM.")
         ## AcquisitionOptimizer SLS
         smac_opts.add_argument("--sls_n_steps_plateau_walk","--sls-n-steps-plateau-walk",
                dest='sls_n_steps_plateau_walk',
