@@ -180,6 +180,3 @@ class QuantileYTransformer(AbstractYTransformer):
         return np.mean(self._transformer.inverse_transform(
                         y.reshape(-1,1)).flatten())
     
-    
-        
-        
