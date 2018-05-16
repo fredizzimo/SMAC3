@@ -40,6 +40,8 @@ class AbstractEPM(object):
         Lower bound vor variance. If estimated variance < var_threshold, the set
         to var_threshold
     y_transformer: AbstractYTransformer
+        strategy to transform y before training
+        and inverse transformation of predictions
     
     """
 
