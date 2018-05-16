@@ -3,6 +3,7 @@ import unittest
 from unittest import mock
 import os
 import shutil
+from nose.plugins.attrib import attr
 
 import numpy as np
 from ConfigSpace import Configuration
@@ -93,11 +94,14 @@ class TestSMBO(unittest.TestCase):
         self.assertIsInstance(smbo.num_run, int)
         self.assertIs(smbo.rng, rng)
         # ML: I don't understand the following line and it throws an error
-        self.assertRaisesRegexp(TypeError,
-                                "Unknown type <(class|type) 'str'> for argument "
-                                'rng. Only accepts None, int or '
-                                'np.random.RandomState',
-                                SMAC, self.scenario, rng='BLA')
+        self.assertRaisesRegex(
+            TypeError,
+            "Argument rng accepts only arguments of type None, int or np.random.RandomState, you provided "
+            "<class 'str'>.",
+            SMAC,
+            self.scenario,
+            rng='BLA',
+        )
 
     def test_choose_next(self):
         seed = 42
@@ -110,7 +114,7 @@ class TestSMBO(unittest.TestCase):
         Y = self.branin(X)
         x = next(smbo.choose_next(X, Y)).get_array()
         assert x.shape == (2,)
-        
+
     def test_choose_next_w_empty_rh(self):
         seed = 42
         smbo = SMAC(self.scenario, rng=seed).solver
@@ -126,9 +130,9 @@ class TestSMBO(unittest.TestCase):
             **{"X":X, "Y":Y}
         )
 
-        x = next(smbo.choose_next(X, Y, incumbent_value=0.0)).get_array()        
+        x = next(smbo.choose_next(X, Y, incumbent_value=0.0)).get_array()
         assert x.shape == (2,)
-        
+
     def test_choose_next_empty_X(self):
         smbo = SMAC(self.scenario, rng=1).solver
         smbo.acquisition_func._compute = mock.Mock(
@@ -146,14 +150,15 @@ class TestSMBO(unittest.TestCase):
         self.assertEqual(x, [0, 1, 2])
         self.assertEqual(smbo._random_search.maximize.call_count, 1)
         self.assertEqual(smbo.acquisition_func._compute.call_count, 0)
-        
+
     def test_choose_next_empty_X_2(self):
         smbo = SMAC(self.scenario, rng=1).solver
 
         X = np.zeros((0, 2))
         Y = np.zeros((0, 1))
 
-        x = smbo.choose_next(X, Y)
+        challengers = smbo.choose_next(X, Y)
+        x = [c for c in challengers]
         self.assertEqual(len(x), 1)
         self.assertIsInstance(x[0], Configuration)
 
@@ -177,7 +182,7 @@ class TestSMBO(unittest.TestCase):
 
         self.assertEqual(smbo.model.train.call_count, 1)
 
-        self.assertEqual(len(x), 10000)
+        self.assertEqual(len(x), 9999)
         num_random_search = 0
         num_local_search = 0
         for i in range(0, 2002, 2):
@@ -216,10 +221,10 @@ class TestSMBO(unittest.TestCase):
         x = [c for c in challengers]
 
         self.assertEqual(smbo.model.train.call_count, 1)
-        self.assertEqual(len(x), 10000)
+        self.assertEqual(len(x), 9999)
         num_random_search = 0
         num_local_search = 0
-        for i in range(0, 10000, 2):
+        for i in range(0, 9999, 2):
             # print(x[i].origin)
             self.assertIsInstance(x[i], Configuration)
             if 'Random Search (sorted)' in x[i].origin:
@@ -246,6 +251,7 @@ class TestSMBO(unittest.TestCase):
         smbo = SMAC(scen, tae_runner=target, rng=1).solver
         self.assertRaises(FirstRunCrashedException, smbo.run)
 
+    @attr('slow')
     def test_intensification_percentage(self):
         def target(x):
             return 5
@@ -253,7 +259,7 @@ class TestSMBO(unittest.TestCase):
             """ Return SMBO with intensification_percentage. """
             scen = Scenario({'cs': test_helpers.get_branin_config_space(),
                              'run_obj': 'quality', 'output_dir': 'data-test_smbo-intensification',
-                             'intensification_percentage' : intensification_perc})
+                             'intensification_percentage': intensification_perc})
             self.output_dirs.append(scen.output_dir)
             return SMAC(scen, tae_runner=target, rng=1).solver
         # Test for valid values
@@ -291,6 +297,15 @@ class TestSMBO(unittest.TestCase):
                 smbo.validate(config_mode='inc', instance_mode='train+test',
                               repetitions=1, use_epm=True, n_jobs=-1, backend='threading')
                 self.assertTrue(epm_validation_mock.called)
+
+    def test_no_initial_design(self):
+        self.scenario.output_dir = "test"
+        smac = SMAC(self.scenario)
+        self.output_dirs.append(smac.output_dir)
+        smbo = smac.solver
+        with mock.patch.object(SingleConfigInitialDesign, "run", return_value=None) as initial_mock:
+            smbo.start()
+            self.assertEqual(smbo.incumbent, smbo.scenario.cs.get_default_configuration())
 
 
 if __name__ == "__main__":

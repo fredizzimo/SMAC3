@@ -1,6 +1,5 @@
 import logging
 import os
-import shutil
 import typing
 
 import numpy as np
@@ -26,6 +25,8 @@ from smac.optimizer.objective import average_cost
 from smac.optimizer.acquisition import EI, LogEI, AbstractAcquisitionFunction
 from smac.optimizer.ei_optimization import InterleavedLocalAndRandomSearch, \
     AcquisitionFunctionMaximizer
+from smac.optimizer.random_configuration_chooser import ChooserNoCoolDown, \
+    ChooserLinearCoolDown, RandomConfigurationChooser
 from smac.epm.rf_with_instances import RandomForestWithInstances
 from smac.epm.rfr_imputator import RFRImputator
 from smac.epm.base_epm import AbstractEPM
@@ -37,7 +38,7 @@ from smac.configspace import Configuration
 
 
 __author__ = "Marius Lindauer"
-__copyright__ = "Copyright 2016, ML4AAD"
+__copyright__ = "Copyright 2018, ML4AAD"
 __license__ = "3-clause BSD"
 
 
@@ -57,20 +58,21 @@ class SMAC(object):
 
     def __init__(self,
                  scenario: Scenario,
-                 tae_runner: typing.Union[ExecuteTARun, typing.Callable]=None,
-                 runhistory: RunHistory=None,
-                 intensifier: Intensifier=None,
-                 acquisition_function: AbstractAcquisitionFunction=None,
-                 acquisition_function_optimizer: AcquisitionFunctionMaximizer=None,
-                 model: AbstractEPM=None,
-                 runhistory2epm: AbstractRunHistory2EPM=None,
-                 initial_design: InitialDesign=None,
-                 initial_configurations: typing.List[Configuration]=None,
-                 stats: Stats=None,
-                 restore_incumbent: Configuration=None,
-                 rng: typing.Union[np.random.RandomState, int]=None,
-                 smbo_class: SMBO=None,
-                 run_id: int=1):
+                 tae_runner: typing.Optional[typing.Union[ExecuteTARun, typing.Callable]]=None,
+                 runhistory: typing.Optional[RunHistory]=None,
+                 intensifier: typing.Optional[Intensifier]=None,
+                 acquisition_function: typing.Optional[AbstractAcquisitionFunction]=None,
+                 acquisition_function_optimizer: typing.Optional[AcquisitionFunctionMaximizer]=None,
+                 model: typing.Optional[AbstractEPM]=None,
+                 runhistory2epm: typing.Optional[AbstractRunHistory2EPM]=None,
+                 initial_design: typing.Optional[InitialDesign]=None,
+                 initial_configurations: typing.Optional[typing.List[Configuration]]=None,
+                 stats: typing.Optional[Stats]=None,
+                 restore_incumbent: typing.Optional[Configuration]=None,
+                 rng: typing.Optional[typing.Union[np.random.RandomState, int]]=None,
+                 smbo_class: typing.Optional[SMBO]=None,
+                 run_id: typing.Optional[int]=None,
+                 random_configuration_chooser: typing.Optional[RandomConfigurationChooser]=None):
         """Constructor
 
         Parameters
@@ -118,8 +120,11 @@ class SMAC(object):
         smbo_class : ~smac.optimizer.smbo.SMBO
             Class implementing the SMBO interface which will be used to
             instantiate the optimizer class.
-        run_id: int, (default: 1)
-            Run ID will be used as subfolder for output_dir.
+        run_id : int (optional)
+            Run ID will be used as subfolder for output_dir. If no ``run_id`` is given, a random ``run_id`` will be
+            chosen.
+        random_configuration_chooser : ~smac.optimizer.random_configuration_chooser.RandomConfigurationChooser
+            How often to choose a random configuration during the intensification procedure.
         """
 
         self.logger = logging.getLogger(
@@ -130,16 +135,21 @@ class SMAC(object):
         self.scenario = scenario
         self.output_dir = ""
         if not restore_incumbent:
+            # restore_incumbent is used by the CLI interface which provides a method for restoring a SMAC run given an
+            # output directory. This is the default path.
+            # initial random number generator
+            run_id, rng = self._get_rng(rng=rng, run_id=run_id)
             self.output_dir = create_output_directory(scenario, run_id)
         elif scenario.output_dir is not None:
+            run_id, rng = self._get_rng(rng=rng, run_id=run_id)
             # output-directory is created in CLI when restoring from a
             # folder. calling the function again in the facade results in two
             # folders being created: run_X and run_X.OLD. if we are
             # restoring, the output-folder exists already and we omit creating it,
             # but set the self-output_dir to the dir.
             # necessary because we want to write traj to new output-dir in CLI.
-            self.output_dir = os.path.join(scenario.output_dir,
-                                           "run_%d" % (run_id))
+            self.output_dir = scenario.output_dir_for_this_run
+
         if (
             scenario.deterministic is True
             and getattr(scenario, 'tuner_timeout', None) is None
@@ -164,8 +174,8 @@ class SMAC(object):
         if runhistory.aggregate_func is None:
             runhistory.aggregate_func = aggregate_func
 
-        # initial random number generator
-        num_run, rng = self._get_rng(rng=rng)
+        random_configuration_chooser = SMAC._get_random_configuration_chooser(
+            random_configuration_chooser=random_configuration_chooser)
 
         # reset random number generator in config space to draw different
         # random configurations with each seed given to SMAC
@@ -177,12 +187,18 @@ class SMAC(object):
         # initial EPM
         types, bounds = get_types(scenario.cs, scenario.feature_array)
         if model is None:
-            model = RandomForestWithInstances(types=types, 
+            model = RandomForestWithInstances(types=types,
                                               bounds=bounds,
                                               instance_features=scenario.feature_array,
                                               seed=rng.randint(MAXINT),
                                               pca_components=scenario.PCA_DIM,
-                                              unlog_y=scenario.run_obj == "runtime")
+                                              unlog_y=scenario.run_obj == "runtime",
+                                              num_trees=scenario.rf_num_trees,
+                                              do_bootstrapping=scenario.rf_do_bootstrapping,
+                                              ratio_features=scenario.rf_ratio_features,
+                                              min_samples_split=scenario.rf_min_samples_split,
+                                              min_samples_leaf=scenario.rf_min_samples_leaf,
+                                              max_depth=scenario.rf_max_depth)
         # initial acquisition function
         if acquisition_function is None:
             acquisition_function = EI(model=model)
@@ -194,7 +210,11 @@ class SMAC(object):
         # initialize optimizer on acquisition function
         if acquisition_function_optimizer is None:
             acquisition_function_optimizer = InterleavedLocalAndRandomSearch(
-                acquisition_function, scenario.cs, np.random.RandomState(seed=rng.randint(MAXINT))
+                acquisition_function=acquisition_function,
+                config_space=scenario.cs,
+                rng=np.random.RandomState(seed=rng.randint(MAXINT)),
+                max_steps=scenario.sls_max_steps,
+                n_steps_plateau_walk=scenario.sls_n_steps_plateau_walk
             )
         elif not isinstance(
                 acquisition_function_optimizer,
@@ -215,7 +235,8 @@ class SMAC(object):
                                          run_obj=scenario.run_obj,
                                          runhistory=runhistory,
                                          par_factor=scenario.par_factor,
-                                         cost_for_crash=scenario.cost_for_crash)
+                                         cost_for_crash=scenario.cost_for_crash,
+                                         abort_on_first_run_crash=scenario.abort_on_first_run_crash)
         # Second case, the tae_runner is a function to be optimized
         elif callable(tae_runner):
             tae_runner = ExecuteTAFuncDict(ta=tae_runner,
@@ -224,7 +245,8 @@ class SMAC(object):
                                            memory_limit=scenario.memory_limit,
                                            runhistory=runhistory,
                                            par_factor=scenario.par_factor,
-                                           cost_for_crash=scenario.cost_for_crash)
+                                           cost_for_crash=scenario.cost_for_crash,
+                                           abort_on_first_run_crash=scenario.abort_on_first_run_crash)
         # Third case, if it is an ExecuteTaRun we can simply use the
         # instance. Otherwise, the next check raises an exception
         elif not isinstance(tae_runner, ExecuteTARun):
@@ -265,7 +287,9 @@ class SMAC(object):
                                         if scenario.always_race_default else None,
                                       instance_specifics=scenario.instance_specific,
                                       minR=scenario.minR,
-                                      maxR=scenario.maxR)
+                                      maxR=scenario.maxR,
+                                      adaptive_capping_slackfactor=scenario.intens_adaptive_capping_slackfactor,
+                                      min_chall=scenario.intens_min_chall)
         # inject deps if necessary
         if intensifier.tae_runner is None:
             intensifier.tae_runner = tae_runner
@@ -345,7 +369,7 @@ class SMAC(object):
             elif scenario.run_obj == 'quality':
                 runhistory2epm = RunHistory2EPM4Cost(scenario=scenario, num_params=num_params,
                                                      success_states=[
-                                                         StatusType.SUCCESS, 
+                                                         StatusType.SUCCESS,
                                                          StatusType.CRASHED],
                                                      impute_censored_data=False, impute_state=None)
 
@@ -365,48 +389,91 @@ class SMAC(object):
             'runhistory2epm': runhistory2epm,
             'intensifier': intensifier,
             'aggregate_func': aggregate_func,
-            'num_run': num_run,
+            'num_run': run_id,
             'model': model,
             'acq_optimizer': acquisition_function_optimizer,
             'acquisition_func': acquisition_function,
             'rng': rng,
-            'restore_incumbent': restore_incumbent
+            'restore_incumbent': restore_incumbent,
+            'random_configuration_chooser': random_configuration_chooser
         }
         if smbo_class is None:
             self.solver = SMBO(**smbo_args)
         else:
             self.solver = smbo_class(**smbo_args)
 
-    def _get_rng(self, rng):
-        """Initialize random number generator
+    def _get_rng(
+            self,
+            rng: typing.Optional[typing.Union[int, np.random.RandomState]]=None,
+            run_id: typing.Optional[int]=None,
+    ) -> typing.Tuple[int, np.random.RandomState]:
+        """Initialize random number generator and set run_id
 
-        If rng is None, initialize a new generator
-        If rng is Int, create RandomState from that
-        If rng is RandomState, return it
+        * If rng and run_id are None, initialize a new generator and sample a run_id
+        * If rng is None and a run_id is given, use the run_id to initialize the rng
+        * If rng is an int, a RandomState object is created from that.
+        * If rng is RandomState, return it
+        * If only run_id is None, a run_id is sampled from the random state.
 
         Parameters
         ----------
-        rng: np.random.RandomState|int|None
+        rng : np.random.RandomState|int|None
+
+        run_id : int, optional
 
         Returns
         -------
-        int, np.random.RandomState
+        int
+        np.random.RandomState
         """
         # initialize random number generator
-        if rng is None:
-            self.logger.debug('no rng given: using default seed of 1')
-            num_run = 1
-            rng = np.random.RandomState(seed=num_run)
+        if rng is not None and not isinstance(rng, (int, np.random.RandomState)):
+            raise TypeError('Argument rng accepts only arguments of type None, int or np.random.RandomState, '
+                            'you provided %s.' % str(type(rng)))
+        if run_id is not None and not isinstance(run_id, int):
+            raise TypeError('Argument run_id accepts only arguments of type None, int or np.random.RandomState, '
+                            'you provided %s.' % str(type(run_id)))
+
+        if rng is None and run_id is None:
+            # Case that both are None
+            self.logger.debug('No rng and no run_id given: using a random value to initialize run_id.')
+            rng = np.random.RandomState()
+            run_id = rng.randint(MAXINT)
+        elif rng is None and isinstance(run_id, int):
+            self.logger.debug('No rng and no run_id given: using run_id %d as seed.', run_id)
+            rng = np.random.RandomState(seed=run_id)
         elif isinstance(rng, int):
-            num_run = rng
+            if run_id is None:
+                run_id = rng
+            else:
+                pass
             rng = np.random.RandomState(seed=rng)
         elif isinstance(rng, np.random.RandomState):
-            num_run = rng.randint(MAXINT)
-            rng = rng
+            if run_id is None:
+                run_id = rng.randint(MAXINT)
+            else:
+                pass
         else:
-            raise TypeError('Unknown type %s for argument rng. Only accepts '
-                            'None, int or np.random.RandomState' % str(type(rng)))
-        return num_run, rng
+            raise ValueError('This should not happen! Please contact the developers! Arguments: rng=%s of type %s and '
+                             'run_id=% of type %s' % (rng, type(rng), run_id, type(run_id)))
+        return run_id, rng
+
+    @staticmethod
+    def _get_random_configuration_chooser(random_configuration_chooser):
+        """Initialize random configuration chooser
+        If random_configuration_chooser is falsy, initialize with ChooserNoCoolDown(2.0)
+
+        Parameters
+        ----------
+        random_configuration_chooser: ChooserNoCoolDown|ChooserLinearCoolDown|None
+
+        Returns
+        -------
+        ChooserNoCoolDown|ChooserLinearCoolDown
+        """
+        if not random_configuration_chooser:
+            return ChooserNoCoolDown(2.0)
+        return random_configuration_chooser
 
     def optimize(self):
         """Optimizes the algorithm provided in scenario (given in constructor)
@@ -422,7 +489,9 @@ class SMAC(object):
         finally:
             self.solver.stats.save()
             self.solver.stats.print_stats()
-            self.logger.info("Final Incumbent: %s" % (self.solver.incumbent))
+            self.logger.info("Final Incumbent: %s", self.solver.incumbent)
+            if self.solver.incumbent and self.solver.incumbent in self.solver.runhistory.get_all_configs():
+                self.logger.info("Estimated cost of incumbent: %f", self.solver.runhistory.get_cost(self.solver.incumbent))
             self.runhistory = self.solver.runhistory
             self.trajectory = self.solver.intensifier.traj_logger.trajectory
 

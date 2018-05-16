@@ -45,9 +45,9 @@ if __name__ == "__main__":
                           choices=["train", "test", "train+test"],
                           help="what instances to evaluate")
     req_opts.add_argument('--epm', dest='epm', action='store_true',
-                        help="Use EPM to validate")
+                          help="Use EPM to validate")
     req_opts.add_argument('--no-epm', dest='epm', action='store_false',
-                        help="Don't use EPM to validate")
+                          help="Don't use EPM to validate")
     req_opts.set_defaults(epm=False)
     req_opts.add_argument("--runhistory", default=None, type=str, nargs='*',
                           help="path to one or more runhistories to take runs "
@@ -76,7 +76,7 @@ if __name__ == "__main__":
     else:
         logging.basicConfig(level=logging.DEBUG)
 
-    scenario = Scenario(args_.scenario, cmd_args={'output_dir': ""})
+    scenario = Scenario(args_.scenario, cmd_options={'output_dir': ""})
     traj_logger = TrajLogger(None, Stats(scenario))
     trajectory = traj_logger.read_traj_aclib_format(args_.trajectory, scenario.cs)
     if args_.tae == "old":
