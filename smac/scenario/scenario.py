@@ -32,6 +32,11 @@ def _is_truthy(arg):
         raise ValueError("{} cannot be interpreted as a boolean argument. "
                          "Please use one of {{0, false, 1, true}}.".format(arg))
 
+if sys.platform == "win32":
+    timeformat = '%Y-%m-%d_%H_%M_%S_%f'
+else:
+    timeformat = '%Y-%m-%d_%H:%M:%S_%f'
+
 
 class Scenario(object):
 
@@ -319,7 +324,7 @@ class Scenario(object):
                           default="smac3-output_%s" % (
                               datetime.datetime.fromtimestamp(
                                   time.time()).strftime(
-                                  '%Y-%m-%d_%H:%M:%S_%f')))
+                                  timeformat)))
         self.add_argument(name='input_psmac_dirs', default=None,
                           help="For parallel SMAC, multiple output-directories "
                                "are used.")
