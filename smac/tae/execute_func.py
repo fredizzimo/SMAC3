@@ -4,7 +4,9 @@ import math
 import time
 
 import numpy as np
-import pynisher
+import sys
+if sys.platform != "win32":
+    import pynisher
 
 from smac.tae.execute_ta_run import StatusType, ExecuteTARun
 from smac.utils.constants import MAXINT
@@ -72,6 +74,9 @@ class AbstractTAFunc(ExecuteTARun):
         if memory_limit is not None:
             memory_limit = int(math.ceil(memory_limit))
         self.memory_limit = memory_limit
+
+        if sys.platform == "win32" and use_pynisher:
+            raise RuntimeError("Pynisher is not available on Windows")
         
         self.use_pynisher = use_pynisher
 

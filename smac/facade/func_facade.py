@@ -60,7 +60,8 @@ def fmin_smac(func: callable,
         cs.add_hyperparameter(parameter)
 
     # Create target algorithm runner
-    ta = ExecuteTAFuncArray(ta=func)
+    # Pynisher can be disabled since we don't have any cpu or memory limit
+    ta = ExecuteTAFuncArray(ta=func, use_pynisher=False)
 
     # create scenario
     scenario_dict = {"run_obj": "quality",
