@@ -75,9 +75,6 @@ class AbstractTAFunc(ExecuteTARun):
             memory_limit = int(math.ceil(memory_limit))
         self.memory_limit = memory_limit
 
-        if sys.platform == "win32" and use_pynisher:
-            raise RuntimeError("Pynisher is not available on Windows")
-        
         self.use_pynisher = use_pynisher
 
     def run(self, config, instance=None,
@@ -132,7 +129,14 @@ class AbstractTAFunc(ExecuteTARun):
         if self._accepts_instance:
             obj_kwargs['instance'] = instance
 
-        if self.use_pynisher:
+        use_pynisher = self.use_pynisher
+
+        if sys.platform == "win32":
+            use_pynisher = False
+            if self.memory_limit is not None or cutoff is not None:
+                raise RuntimeError("Pynisher is not available on Windows and therefore not memory limit or cutoff")
+
+        if use_pynisher:
 
             obj = pynisher.enforce_limits(**arguments)(self.ta)
     
@@ -161,8 +165,8 @@ class AbstractTAFunc(ExecuteTARun):
             runtime = float(obj.wall_clock_time)
         else:
             start_time = time.time()
-            result = self.ta(config, **obj_kwargs)
-            
+            result = self._call_ta(self.ta, config, **obj_kwargs)
+
             if result is not None:
                 status = StatusType.SUCCESS
                 cost = result
