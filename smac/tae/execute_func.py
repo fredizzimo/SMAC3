@@ -139,45 +139,35 @@ class AbstractTAFunc(ExecuteTARun):
                                  "be respected")
 
         if use_pynisher:
-
             obj = pynisher.enforce_limits(**arguments)(self.ta)
-    
             rval = self._call_ta(obj, config, **obj_kwargs)
-    
-            if isinstance(rval, tuple):
-                result = rval[0]
-                additional_run_info = rval[1]
-            else:
-                result = rval
-                additional_run_info = {}
-    
+            runtime = float(obj.wall_clock_time)
             if obj.exit_status is pynisher.TimeoutException:
                 status = StatusType.TIMEOUT
                 cost = self.crash_cost
             elif obj.exit_status is pynisher.MemorylimitException:
                 status = StatusType.MEMOUT
                 cost = self.crash_cost
-            elif obj.exit_status == 0 and result is not None:
-                status = StatusType.SUCCESS
-                cost = result
-            else:
-                status = StatusType.CRASHED
-                cost = self.crash_cost
-        
-            runtime = float(obj.wall_clock_time)
         else:
             start_time = time.time()
-            result = self._call_ta(self.ta, config, **obj_kwargs)
+            rval = self._call_ta(self.ta, config, **obj_kwargs)
+            runtime = time.time() - start_time
+            status = None
 
+        if isinstance(rval, tuple):
+            result = rval[0]
+            additional_run_info = rval[1]
+        else:
+            result = rval
+            additional_run_info = {}
+
+        if status is None:
             if result is not None:
                 status = StatusType.SUCCESS
                 cost = result
             else:
                 status = StatusType.CRASHED
                 cost = self.crash_cost
-            
-            runtime = time.time() - start_time
-            additional_run_info = {}
 
         return status, cost, runtime, additional_run_info
 
