@@ -86,9 +86,13 @@ class TestExecuteFunc(unittest.TestCase):
         self.assertEqual(rval, 5)
 
     def test_memout(self):
-        def fill_memory(*args):
-            a = np.random.random_sample((10000, 10000)).astype(np.float64)
-            return np.sum(a)
+        def fill_memory(arg, seed, instance, cutoff, memory_limit):
+            self.assertEqual(memory_limit, 1024)
+            if sys.platform != 'win32':
+                a = np.random.random_sample((10000, 10000)).astype(np.float64)
+                return np.sum(a)
+            else:
+                raise MemoryError
 
         taf = ExecuteTAFuncDict(ta=fill_memory, stats=self.stats,
                                 memory_limit=1024)
@@ -100,7 +104,7 @@ class TestExecuteFunc(unittest.TestCase):
                         'darwin': 'osx'}.get(sys.platform)
 
         print(platform, sys.platform)
-        if platform == 'linux':
+        if platform == 'linux' or sys.platform == 'win32':
             self.assertEqual(rval[0], StatusType.MEMOUT)
             self.assertEqual(rval[1], 2147483647.0)
             self.assertGreaterEqual(rval[2], 0.0)
@@ -113,8 +117,12 @@ class TestExecuteFunc(unittest.TestCase):
 
 
     def test_timeout(self):
-        def run_over_time(*args):
-            time.sleep(5)
+        def run_over_time(arg, seed, instance, cutoff):
+            self.assertEqual(cutoff, 1)
+            if sys.platform != 'win32':
+                time.sleep(5)
+            else:
+                raise TimeoutError
 
         taf = ExecuteTAFuncDict(ta=run_over_time, stats=self.stats)
         rval = taf.run(config=None, cutoff=1)
@@ -124,8 +132,12 @@ class TestExecuteFunc(unittest.TestCase):
         self.assertEqual(rval[3], dict())
 
     def test_timeout_runtime(self):
-        def run_over_time(*args):
-            time.sleep(5)
+        def run_over_time(arg, seed, instance, cutoff):
+            if sys.platform != 'win32':
+                time.sleep(5)
+            else:
+                time.sleep(cutoff)
+                raise TimeoutError
 
         taf = ExecuteTAFuncDict(ta=run_over_time, stats=self.stats,
                                 run_obj='runtime', par_factor=11)

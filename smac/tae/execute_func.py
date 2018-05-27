@@ -70,6 +70,8 @@ class AbstractTAFunc(ExecuteTARun):
         signature = inspect.signature(ta).parameters
         self._accepts_seed = len(signature) > 1
         self._accepts_instance = len(signature) > 2
+        self._accepts_cutoff = len(signature) > 3
+        self._accepts_memory_limit = len(signature) > 4
 
         if memory_limit is not None:
             memory_limit = int(math.ceil(memory_limit))
@@ -128,6 +130,10 @@ class AbstractTAFunc(ExecuteTARun):
             obj_kwargs['seed'] = seed
         if self._accepts_instance:
             obj_kwargs['instance'] = instance
+        if self._accepts_cutoff:
+            obj_kwargs['cutoff'] = cutoff
+        if self._accepts_memory_limit:
+            obj_kwargs['memory_limit'] = self.memory_limit
 
         use_pynisher = self.use_pynisher
 
@@ -150,14 +156,20 @@ class AbstractTAFunc(ExecuteTARun):
                 cost = self.crash_cost
         else:
             start_time = time.time()
+            rval = None
+            status = None
             try:
                 rval = self._call_ta(self.ta, config, **obj_kwargs)
-            except:
+            except TimeoutError:
+                status = StatusType.TIMEOUT
+                cost = self.crash_cost
+            except MemoryError:
+                status = StatusType.MEMOUT
+                cost = self.crash_cost
+            except Exception as e:
                 # Since rval is not set, the result will be set to crashed below
-                rval = None
                 pass
             runtime = time.time() - start_time
-            status = None
 
         if isinstance(rval, tuple):
             result = rval[0]
