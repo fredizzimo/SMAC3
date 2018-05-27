@@ -150,7 +150,12 @@ class AbstractTAFunc(ExecuteTARun):
                 cost = self.crash_cost
         else:
             start_time = time.time()
-            rval = self._call_ta(self.ta, config, **obj_kwargs)
+            try:
+                rval = self._call_ta(self.ta, config, **obj_kwargs)
+            except:
+                # Since rval is not set, the result will be set to crashed below
+                rval = None
+                pass
             runtime = time.time() - start_time
             status = None
 

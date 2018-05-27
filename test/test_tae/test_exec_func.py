@@ -145,3 +145,14 @@ class TestExecuteFunc(unittest.TestCase):
         self.assertEqual(rval[1], 2147483647.0)
         self.assertGreaterEqual(rval[2], 0.0)
         self.assertEqual(rval[3], dict())
+
+    def test_crash(self):
+        def function(*args):
+            raise Exception("Lets crash")
+
+        taf = ExecuteTAFuncDict(ta=function, stats=self.stats)
+        rval = taf.run(config=None, cutoff=1)
+        self.assertEqual(rval[0], StatusType.CRASHED)
+        self.assertEqual(rval[1], 2147483647.0)
+        self.assertGreaterEqual(rval[2], 0.0)
+        self.assertEqual(rval[3], dict())
