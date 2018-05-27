@@ -133,8 +133,10 @@ class AbstractTAFunc(ExecuteTARun):
 
         if sys.platform == "win32":
             use_pynisher = False
+
             if self.memory_limit is not None or cutoff is not None:
-                raise RuntimeError("Pynisher is not available on Windows and therefore not memory limit or cutoff")
+                self.logger.warn("Pynisher is not available on Windows, so automatic memory and cutof limits will not "
+                                 "be respected")
 
         if use_pynisher:
 
